@@ -45,8 +45,8 @@ type Dispatcher struct {
 	onResultFunc OnResultFunc
 }
 
-// NewDispatcher returns new dispatcher with max workers
-func NewDispatcher(max int, treatFunc TreatFunc, onResultFunc OnResultFunc) *Dispatcher {
+// New returns new dispatcher with max workers
+func New(max int, treatFunc TreatFunc, onResultFunc OnResultFunc) *Dispatcher {
 	return &Dispatcher{
 		workers:    counter.New(0),
 		maxWorkers: max,

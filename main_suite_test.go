@@ -97,7 +97,7 @@ func TestApp(t *testing.T) {
 		totalFound.Add(n)
 	}
 
-	dispatcher = d.NewDispatcher(maxWorkers, treatFunc, onResultFunc)
+	dispatcher = d.New(maxWorkers, treatFunc, onResultFunc)
 	go dispatcher.Run()
 
 	rand.Seed(time.Now().UnixNano())
