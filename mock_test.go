@@ -1,4 +1,4 @@
-package dispatcher
+package dispatcher_test
 
 import (
 	"fmt"

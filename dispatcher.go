@@ -1,25 +1,23 @@
 package dispatcher
 
 import (
+	"sync"
+
 	"github.com/mtfelian/dispatcher/counter"
 	"github.com/mtfelian/dispatcher/queue"
 )
 
 type (
-	// Gi is a generic input type
-	Gi interface{}
-	// Gr is a generic resulting type
-	Gr interface{}
-	// Result is a testOutput data consisting of Gi and Gr to easily link the input and output data
+	// Result is a testOutput data consisting of input and output data
 	Result struct {
-		in  Gi
-		out Gr
+		In  interface{}
+		Out interface{}
 	}
 
-	// Channels used by dispatcher
-	Channels struct {
-		// data is an input data
-		data chan Gi
+	// channels used by dispatcher
+	channels struct {
+		// input is an input input
+		input chan interface{}
 		// leave <- send here when worker stops
 		leave chan error
 		// results <- here at worker ends
@@ -29,44 +27,47 @@ type (
 	}
 
 	// TreatFunc is a func for treating generic input element
-	TreatFunc func(element Gi) (Gr, error)
+	TreatFunc func(element interface{}) (interface{}, error)
 
 	// OnResultFunc is a func to perform with testOutput on task end
 	OnResultFunc func(result Result)
 )
 
-// InitChannels initializes channels for dispatcher
-func InitChannels() Channels {
-	return Channels{
-		data:    make(chan Gi),
-		leave:   make(chan error),
-		results: make(chan Result),
-		stop:    make(chan bool),
-	}
-}
-
 // dispatcher
 type Dispatcher struct {
+	sync.Mutex
 	workers      counter.Synced
 	maxWorkers   int
 	tasksDone    counter.Synced
 	errorCount   counter.Synced
-	signals      Channels
+	signals      channels
 	treatFunc    TreatFunc
 	onResultFunc OnResultFunc
 }
 
 // NewDispatcher returns new dispatcher with max workers
-func NewDispatcher(signals Channels, max int, treatFunc TreatFunc, onResultFunc OnResultFunc) *Dispatcher {
+func NewDispatcher(max int, treatFunc TreatFunc, onResultFunc OnResultFunc) *Dispatcher {
 	return &Dispatcher{
-		workers:      counter.New(0),
-		maxWorkers:   max,
-		tasksDone:    counter.New(0),
-		errorCount:   counter.New(0),
-		signals:      signals,
+		workers:    counter.New(0),
+		maxWorkers: max,
+		tasksDone:  counter.New(0),
+		errorCount: counter.New(0),
+		signals: channels{
+			input:   make(chan interface{}),
+			leave:   make(chan error),
+			results: make(chan Result),
+			stop:    make(chan bool),
+		},
 		treatFunc:    treatFunc,
 		onResultFunc: onResultFunc,
 	}
+}
+
+// _signals returns signals struct thread-safely
+func (d *Dispatcher) _signals() *channels {
+	d.Lock()
+	defer d.Unlock()
+	return &d.signals
 }
 
 // Workers returns current worker count
@@ -76,30 +77,33 @@ func (d *Dispatcher) Workers() int { return d.workers.Get() }
 func (d *Dispatcher) SetMaxWorkers(n int) { d.maxWorkers = n }
 
 // Stop the dispatcher
-func (d *Dispatcher) Stop() { d.signals.stop <- true }
+func (d *Dispatcher) Stop() { d._signals().stop <- true }
+
+// AddWork adds work input to dispatcher
+func (d *Dispatcher) AddWork(data interface{}) { d._signals().input <- data }
 
 // TasksDone returns done tasks count
 func (d *Dispatcher) TasksDone() int { return d.tasksDone.Get() }
 
 // treat the element
-func (d *Dispatcher) treat(element Gi) {
+func (d *Dispatcher) treat(element interface{}) {
 	result, err := d.treatFunc(element)
 	if err != nil {
-		d.signals.leave <- err
+		d._signals().leave <- err
 		return
 	}
-	d.signals.results <- Result{in: element, out: result}
-	d.signals.leave <- nil
+	d._signals().results <- Result{In: element, Out: result}
+	d._signals().leave <- nil
 }
 
 // popTreat pops an element from queue q and treats it
 func (d *Dispatcher) popTreat(q *queue.Synced) {
 	popped, err := q.Pop()
 	if err != nil {
-		d.signals.leave <- err
+		d._signals().leave <- err
 		return
 	}
-	go d.treat(popped.(Gi))
+	go d.treat(popped.(interface{}))
 }
 
 // Run starts dispatching
@@ -107,7 +111,7 @@ func (d *Dispatcher) Run() {
 	q := queue.New()
 	for {
 		select {
-		case <-d.signals.leave: // worker is done
+		case <-d._signals().leave: // worker is done
 			d.tasksDone.Inc()
 			d.workers.Dec()
 			// queue is not empty -- can add worker
@@ -115,7 +119,7 @@ func (d *Dispatcher) Run() {
 				d.workers.Inc()
 				d.popTreat(&q)
 			}
-		case data := <-d.signals.data: // dispatcher receives data
+		case data := <-d._signals().input: // dispatcher receives input
 			if d.workers.Get() >= d.maxWorkers {
 				q.Push(data)
 				continue
@@ -131,9 +135,9 @@ func (d *Dispatcher) Run() {
 
 			// queue is empty, simply treat the url
 			go d.treat(data)
-		case result := <-d.signals.results: // received a testOutput from worker
+		case result := <-d._signals().results: // received a testOutput from worker
 			d.onResultFunc(result)
-		case <-d.signals.stop: // stop signal received
+		case <-d._signals().stop: // stop signal received
 			return
 		}
 	}

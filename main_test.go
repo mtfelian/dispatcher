@@ -1,4 +1,4 @@
-package dispatcher
+package dispatcher_test
 
 import (
 	"bytes"
@@ -53,6 +53,6 @@ var _ = Describe("Testing apiTreat", func() {
 		Expect(totalFound.Get()).To(BeNumerically("==", totalExpected),
 			"totalFound != totalExpected, %d != %d", totalFound, totalExpected)
 
-		signals.stop <- true
+		dispatcher.Stop()
 	})
 })

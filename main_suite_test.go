@@ -1,4 +1,13 @@
-package dispatcher
+/*
+In this example the test application launches the HTTP server.
+This HTTP server handles route POST /treat
+Also it launches mock HTTP server which used out of API request to POST /treat via treatFunc : http.Get(in.URL)
+I.e. data sent to the dispatcher are treated via treatFunc call.
+Then result is transmitted to onResultFunc of the dispatcher and you will see it
+on the console stdout as "Count for..."
+Launch with 'ginkgo -race' or 'ginkgo -race -untilItFails' for infinite testing.
+*/
+package dispatcher_test
 
 import (
 	"encoding/json"
@@ -11,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	d "github.com/mtfelian/dispatcher"
 	"github.com/mtfelian/dispatcher/counter"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -19,12 +28,11 @@ import (
 
 var (
 	mServer    *mockServer
-	dispatcher *Dispatcher
+	dispatcher *d.Dispatcher
 	server     *httptest.Server
 
 	totalFound = counter.New(0)
 	maxWorkers = 9
-	signals    Channels
 )
 
 // testInput is an input for apiTreat method
@@ -39,42 +47,37 @@ type testOutput struct {
 	url string
 }
 
-// startHTTPServer launches the requests router
+// testHandler is a test HTTP handler
+type testHandler struct{}
 
-// apiTreat finds the What on page at given URL
-func apiTreat(c *gin.Context) {
-	body, err := ioutil.ReadAll(c.Request.Body)
+// ServeHTTP is a test HTTP server handler
+func (h *testHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		fmt.Fprintf(w, `{"error":"%s"}`, err.Error())
 		return
 	}
 
 	var input testInput
 	if err := json.Unmarshal(body, &input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		fmt.Fprintf(w, `{"error":"%s"}`, err.Error())
 		return
 	}
 
-	go func() { signals.data <- input }()
-	c.Status(http.StatusOK)
+	go func() { dispatcher.AddWork(input) }()
+	w.WriteHeader(http.StatusOK)
 }
 
+// TestApp runs all test suites
 func TestApp(t *testing.T) {
-	server = httptest.NewServer(func() *gin.Engine {
-		router := gin.Default()
-		router.POST("/treat", apiTreat)
-		return router
-	}())
+	server = httptest.NewServer(&testHandler{})
 	defer server.Close()
 
 	// init mock server
 	mServer = newMockServer()
 	defer mServer.Close()
 
-	// init dispatcher
-	signals = InitChannels()
-
-	treatFunc := func(element Gi) (Gr, error) {
+	treatFunc := func(element interface{}) (interface{}, error) {
 		in := element.(testInput)
 		response, err := http.Get(in.URL)
 		if err != nil {
@@ -88,13 +91,13 @@ func TestApp(t *testing.T) {
 		return testOutput{n: strings.Count(string(respBytes), in.What), url: in.URL}, nil
 	}
 
-	onResultFunc := func(r Result) {
-		n := r.out.(testOutput).n
-		fmt.Printf("Count for %s: %d\n", r.in.(testInput).URL, n)
+	onResultFunc := func(r d.Result) {
+		n := r.Out.(testOutput).n
+		fmt.Printf("Count for %s: %d\n", r.In.(testInput).URL, n)
 		totalFound.Add(n)
 	}
 
-	dispatcher = NewDispatcher(signals, maxWorkers, treatFunc, onResultFunc)
+	dispatcher = d.NewDispatcher(maxWorkers, treatFunc, onResultFunc)
 	go dispatcher.Run()
 
 	rand.Seed(time.Now().UnixNano())
