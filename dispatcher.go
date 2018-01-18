@@ -10,8 +10,9 @@ import (
 type (
 	// Result is a testOutput data consisting of input and output data
 	Result struct {
-		In  interface{}
-		Out interface{}
+		In    interface{}
+		Out   interface{}
+		Error error
 	}
 
 	// channels used by dispatcher
@@ -19,9 +20,7 @@ type (
 		// input is an input input
 		input chan interface{}
 		// leave <- send here when worker stops
-		leave chan error
-		// results <- here at worker ends
-		results chan Result
+		leave chan Result
 		// stop <- send here to stop dispatcher
 		stop chan bool
 	}
@@ -53,10 +52,9 @@ func New(max int, treatFunc TreatFunc, onResultFunc OnResultFunc) *Dispatcher {
 		tasksDone:  counter.New(0),
 		errorCount: counter.New(0),
 		signals: channels{
-			input:   make(chan interface{}),
-			leave:   make(chan error),
-			results: make(chan Result),
-			stop:    make(chan bool),
+			input: make(chan interface{}),
+			leave: make(chan Result),
+			stop:  make(chan bool),
 		},
 		treatFunc:    treatFunc,
 		onResultFunc: onResultFunc,
@@ -88,22 +86,17 @@ func (d *Dispatcher) TasksDone() int { return d.tasksDone.Get() }
 // treat the element
 func (d *Dispatcher) treat(element interface{}) {
 	result, err := d.treatFunc(element)
-	if err != nil {
-		d._signals().leave <- err
-		return
-	}
-	d._signals().results <- Result{In: element, Out: result}
-	d._signals().leave <- nil
+	d._signals().leave <- Result{In: element, Out: result, Error: err}
 }
 
 // popTreat pops an element from queue q and treats it
 func (d *Dispatcher) popTreat(q *queue.Synced) {
 	popped, err := q.Pop()
 	if err != nil {
-		d._signals().leave <- err
+		d._signals().leave <- Result{In: nil, Out: nil, Error: err}
 		return
 	}
-	go d.treat(popped.(interface{}))
+	go d.treat(popped)
 }
 
 // Run starts dispatching
@@ -111,7 +104,9 @@ func (d *Dispatcher) Run() {
 	q := queue.New()
 	for {
 		select {
-		case <-d._signals().leave: // worker is done
+		case r := <-d._signals().leave: // worker is done
+			go d.onResultFunc(r)
+
 			d.tasksDone.Inc()
 			d.workers.Dec()
 			// queue is not empty -- can add worker
@@ -135,8 +130,6 @@ func (d *Dispatcher) Run() {
 
 			// queue is empty, simply treat the url
 			go d.treat(data)
-		case result := <-d._signals().results: // received a testOutput from worker
-			d.onResultFunc(result)
 		case <-d._signals().stop: // stop signal received
 			return
 		}
