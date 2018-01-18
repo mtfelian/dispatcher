@@ -92,9 +92,13 @@ func TestApp(t *testing.T) {
 	}
 
 	onResultFunc := func(r d.Result) {
-		n := r.Out.(testOutput).n
-		fmt.Printf("Count for %s: %d\n", r.In.(testInput).URL, n)
-		totalFound.Add(n)
+		if r.Error == nil {
+			n := r.Out.(testOutput).n
+			fmt.Printf("Count for %s: %d\n", r.In.(testInput).URL, n)
+			totalFound.Add(n)
+			return
+		}
+		fmt.Printf("Error for %s: %v\n", r.In.(testInput), r.Error)
 	}
 
 	dispatcher = d.New(maxWorkers, treatFunc, onResultFunc)

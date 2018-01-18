@@ -50,6 +50,8 @@ var _ = Describe("Testing apiTreat", func() {
 			Expect(attempts).To(BeNumerically("<=", 5), "too long!")
 		}
 
+		Expect(dispatcher.ErrorCount()).To(Equal(0))
+
 		Expect(totalFound.Get()).To(BeNumerically("==", totalExpected),
 			"totalFound != totalExpected, %d != %d", totalFound, totalExpected)
 

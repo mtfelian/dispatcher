@@ -74,6 +74,9 @@ func (d *Dispatcher) Workers() int { return d.workers.Get() }
 // SetMaxWorkers to n
 func (d *Dispatcher) SetMaxWorkers(n int) { d.maxWorkers = n }
 
+// ErrorCount returns an error count
+func (d *Dispatcher) ErrorCount() int { return d.errorCount.Get() }
+
 // Stop the dispatcher
 func (d *Dispatcher) Stop() { d._signals().stop <- true }
 
@@ -105,6 +108,9 @@ func (d *Dispatcher) Run() {
 	for {
 		select {
 		case r := <-d._signals().result: // worker is done
+			if r.Error != nil {
+				d.errorCount.Inc()
+			}
 			go d.onResultFunc(r)
 
 			d.tasksDone.Inc()
