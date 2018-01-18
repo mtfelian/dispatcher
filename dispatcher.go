@@ -17,10 +17,10 @@ type (
 
 	// channels used by dispatcher
 	channels struct {
-		// input is an input input
+		// input is an input data
 		input chan interface{}
-		// leave <- send here when worker stops
-		leave chan Result
+		// result <- send here when worker stops
+		result chan Result
 		// stop <- send here to stop dispatcher
 		stop chan bool
 	}
@@ -52,9 +52,9 @@ func New(max int, treatFunc TreatFunc, onResultFunc OnResultFunc) *Dispatcher {
 		tasksDone:  counter.New(0),
 		errorCount: counter.New(0),
 		signals: channels{
-			input: make(chan interface{}),
-			leave: make(chan Result),
-			stop:  make(chan bool),
+			input:  make(chan interface{}),
+			result: make(chan Result),
+			stop:   make(chan bool),
 		},
 		treatFunc:    treatFunc,
 		onResultFunc: onResultFunc,
@@ -86,14 +86,14 @@ func (d *Dispatcher) TasksDone() int { return d.tasksDone.Get() }
 // treat the element
 func (d *Dispatcher) treat(element interface{}) {
 	result, err := d.treatFunc(element)
-	d._signals().leave <- Result{In: element, Out: result, Error: err}
+	d._signals().result <- Result{In: element, Out: result, Error: err}
 }
 
 // popTreat pops an element from queue q and treats it
 func (d *Dispatcher) popTreat(q *queue.Synced) {
 	popped, err := q.Pop()
 	if err != nil {
-		d._signals().leave <- Result{In: nil, Out: nil, Error: err}
+		d._signals().result <- Result{In: nil, Out: nil, Error: err}
 		return
 	}
 	go d.treat(popped)
@@ -104,7 +104,7 @@ func (d *Dispatcher) Run() {
 	q := queue.New()
 	for {
 		select {
-		case r := <-d._signals().leave: // worker is done
+		case r := <-d._signals().result: // worker is done
 			go d.onResultFunc(r)
 
 			d.tasksDone.Inc()
