@@ -9,27 +9,17 @@ import (
 )
 
 type (
-	// Result consists of an input and output data
+	// Result consists of an inputChan and output data
 	Result struct {
 		In    interface{}
 		Out   interface{}
 		Error error
 	}
 
-	// channels used by dispatcher
-	channels struct {
-		// input is an input data
-		input chan interface{}
-		// result <- send here when worker stops
-		result chan Result
-		// stop <- send here to stop dispatcher
-		stop chan bool
-	}
-
-	// TreatFunc is a func for treating generic input element
+	// TreatFunc is a func for treating generic inputChan element
 	TreatFunc func(element interface{}) (interface{}, error)
 
-	// OnResultFunc is a func to perform with task result when at task finish
+	// OnResultFunc is a func to perform with task resultChan when at task finish
 	OnResultFunc func(result Result)
 )
 
@@ -40,8 +30,12 @@ type Dispatcher struct {
 	tasksDone  counter.Synced
 	errorCount counter.Synced
 
-	signals      channels
-	signalsMutex sync.Mutex
+	// inputChan is an input data channel
+	inputChan chan interface{}
+	// resultChan <- send here when worker stops
+	resultChan chan Result
+	// stopChan <- send here to stop dispatcher
+	stopChan chan bool
 
 	treatFunc TreatFunc
 
@@ -52,25 +46,16 @@ type Dispatcher struct {
 // New returns new dispatcher with max workers
 func New(max int, treatFunc TreatFunc, onResultFunc OnResultFunc) *Dispatcher {
 	return &Dispatcher{
-		workers:    counter.New(0),
-		maxWorkers: max,
-		tasksDone:  counter.New(0),
-		errorCount: counter.New(0),
-		signals: channels{
-			input:  make(chan interface{}),
-			result: make(chan Result),
-			stop:   make(chan bool),
-		},
+		workers:      counter.New(0),
+		maxWorkers:   max,
+		tasksDone:    counter.New(0),
+		errorCount:   counter.New(0),
+		inputChan:    make(chan interface{}),
+		resultChan:   make(chan Result),
+		stopChan:     make(chan bool),
 		treatFunc:    treatFunc,
 		onResultFunc: onResultFunc,
 	}
-}
-
-// _signals returns signals struct thread-safely
-func (d *Dispatcher) _signals() *channels {
-	d.signalsMutex.Lock()
-	defer d.signalsMutex.Unlock()
-	return &d.signals
 }
 
 // Workers returns current worker count
@@ -83,15 +68,15 @@ func (d *Dispatcher) SetMaxWorkers(n int) { d.maxWorkers = n }
 func (d *Dispatcher) ErrorCount() int { return d.errorCount.Get() }
 
 // Stop the dispatcher
-func (d *Dispatcher) Stop() { d._signals().stop <- true }
+func (d *Dispatcher) Stop() { d.stopChan <- true }
 
-// AddWork adds work input to dispatcher
-func (d *Dispatcher) AddWork(data interface{}) { d._signals().input <- data }
+// AddWork adds work inputChan to dispatcher
+func (d *Dispatcher) AddWork(data interface{}) { d.inputChan <- data }
 
 // TasksDone returns done tasks count
 func (d *Dispatcher) TasksDone() int { return d.tasksDone.Get() }
 
-// WaitUntilNoTasks stop the dispatcher making checks for "0 tasks now" every period
+// WaitUntilNoTasks stopChan the dispatcher making checks for "0 tasks now" every period
 func (d *Dispatcher) WaitUntilNoTasks(period time.Duration) {
 	for {
 		time.Sleep(period)
@@ -105,21 +90,21 @@ func (d *Dispatcher) WaitUntilNoTasks(period time.Duration) {
 // treat the element
 func (d *Dispatcher) treat(element interface{}) {
 	result, err := d.treatFunc(element)
-	d._signals().result <- Result{In: element, Out: result, Error: err}
+	d.resultChan <- Result{In: element, Out: result, Error: err}
 }
 
 // popTreat pops an element from queue q and treats it
 func (d *Dispatcher) popTreat(q *queue.Synced) {
 	popped, err := q.Pop()
 	if err != nil {
-		d._signals().result <- Result{In: nil, Out: nil, Error: err}
+		d.resultChan <- Result{In: nil, Out: nil, Error: err}
 		return
 	}
 	go d.treat(popped)
 }
 
-// onResult is called on result receiving from the appropriate channel.
-// a func treating the result called synchronized therefore to treat result is a thread-safe operation
+// onResult is called on resultChan receiving from the appropriate channel.
+// a func treating the resultChan called synchronized therefore to treat resultChan is a thread-safe operation
 func (d *Dispatcher) onResult(result Result) {
 	d.onResultMutex.Lock()
 	d.onResultFunc(result)
@@ -131,7 +116,7 @@ func (d *Dispatcher) Run() {
 	q := queue.New()
 	for {
 		select {
-		case r := <-d._signals().result: // worker is done
+		case r := <-d.resultChan: // worker is done
 			if r.Error != nil {
 				d.errorCount.Inc()
 			}
@@ -144,7 +129,7 @@ func (d *Dispatcher) Run() {
 				d.workers.Inc()
 				d.popTreat(&q)
 			}
-		case data := <-d._signals().input: // dispatcher receives input
+		case data := <-d.inputChan: // dispatcher receives inputChan
 			if d.workers.Get() >= d.maxWorkers {
 				q.Push(data)
 				continue
@@ -160,13 +145,13 @@ func (d *Dispatcher) Run() {
 
 			// queue is empty, simply treat the url
 			go d.treat(data)
-		case <-d._signals().stop: // stop signal received
+		case <-d.stopChan: // stopChan signal received
 			// cleaning up, i think it should be implemented better
 			t := time.NewTimer(time.Second)
 			for {
 				select {
-				case <-d._signals().result:
-				case <-d._signals().input:
+				case <-d.resultChan:
+				case <-d.inputChan:
 				case <-t.C:
 					return
 				}
