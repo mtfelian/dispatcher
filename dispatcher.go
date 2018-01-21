@@ -34,14 +34,18 @@ type (
 
 // dispatcher
 type Dispatcher struct {
-	sync.Mutex
-	workers      counter.Synced
-	maxWorkers   int
-	tasksDone    counter.Synced
-	errorCount   counter.Synced
+	workers    counter.Synced
+	maxWorkers int
+	tasksDone  counter.Synced
+	errorCount counter.Synced
+
 	signals      channels
-	treatFunc    TreatFunc
-	onResultFunc OnResultFunc
+	signalsMutex sync.Mutex
+
+	treatFunc TreatFunc
+
+	onResultFunc  OnResultFunc
+	onResultMutex sync.Mutex
 }
 
 // New returns new dispatcher with max workers
@@ -63,8 +67,8 @@ func New(max int, treatFunc TreatFunc, onResultFunc OnResultFunc) *Dispatcher {
 
 // _signals returns signals struct thread-safely
 func (d *Dispatcher) _signals() *channels {
-	d.Lock()
-	defer d.Unlock()
+	d.signalsMutex.Lock()
+	defer d.signalsMutex.Unlock()
 	return &d.signals
 }
 
@@ -102,6 +106,14 @@ func (d *Dispatcher) popTreat(q *queue.Synced) {
 	go d.treat(popped)
 }
 
+// onResult is called on result receving from the appropriate channel.
+// a func treating the result called synchronized therefore to treat result is thread-safe
+func (d *Dispatcher) onResult(result Result) {
+	d.onResultMutex.Lock()
+	d.onResultFunc(result)
+	d.onResultMutex.Unlock()
+}
+
 // Run starts dispatching
 func (d *Dispatcher) Run() {
 	q := queue.New()
@@ -111,7 +123,7 @@ func (d *Dispatcher) Run() {
 			if r.Error != nil {
 				d.errorCount.Inc()
 			}
-			go d.onResultFunc(r)
+			go d.onResult(r)
 
 			d.tasksDone.Inc()
 			d.workers.Dec()
