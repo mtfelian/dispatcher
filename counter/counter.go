@@ -18,7 +18,7 @@ func New(initialValue int) Synced {
 	}
 }
 
-// Dec increases counter value by 1
+// Inc increases counter value by 1
 func (c *Synced) Inc() {
 	c.Lock()
 	c.count++

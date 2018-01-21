@@ -33,7 +33,7 @@ type (
 	OnResultFunc func(result Result)
 )
 
-// dispatcher
+// Dispatcher implements a task-dispatching functionality
 type Dispatcher struct {
 	workers    counter.Synced
 	maxWorkers int
@@ -118,8 +118,8 @@ func (d *Dispatcher) popTreat(q *queue.Synced) {
 	go d.treat(popped)
 }
 
-// onResult is called on result receving from the appropriate channel.
-// a func treating the result called synchronized therefore to treat result is thread-safe
+// onResult is called on result receiving from the appropriate channel.
+// a func treating the result called synchronized therefore to treat result is a thread-safe operation
 func (d *Dispatcher) onResult(result Result) {
 	d.onResultMutex.Lock()
 	d.onResultFunc(result)
@@ -166,19 +166,11 @@ func (d *Dispatcher) Run() {
 			for {
 				select {
 				case <-d._signals().result:
-				case <-t.C:
-					break
-				}
-			}
-			t = time.NewTimer(time.Second)
-			for {
-				select {
 				case <-d._signals().input:
 				case <-t.C:
-					break
+					return
 				}
 			}
-			return
 		}
 	}
 }
