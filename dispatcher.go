@@ -9,17 +9,17 @@ import (
 )
 
 type (
-	// Result consists of an inputChan and output data
+	// Result consists of an input and output data
 	Result struct {
 		In    interface{}
 		Out   interface{}
 		Error error
 	}
 
-	// TreatFunc is a func for treating generic inputChan element
+	// TreatFunc is a func for treating generic input element
 	TreatFunc func(element interface{}) (interface{}, error)
 
-	// OnResultFunc is a func to perform with task resultChan when at task finish
+	// OnResultFunc is a func to do something with task result on it's finish
 	OnResultFunc func(result Result)
 )
 
@@ -68,15 +68,18 @@ func (d *Dispatcher) SetMaxWorkers(n int) { d.maxWorkers = n }
 func (d *Dispatcher) ErrorCount() int { return d.errorCount.Get() }
 
 // Stop the dispatcher
-func (d *Dispatcher) Stop() { d.stopChan <- true }
+func (d *Dispatcher) Stop() {
+	d.stopChan <- true
+	close(d.stopChan)
+}
 
-// AddWork adds work inputChan to dispatcher
+// AddWork adds work to the dispatcher
 func (d *Dispatcher) AddWork(data interface{}) { d.inputChan <- data }
 
 // TasksDone returns done tasks count
 func (d *Dispatcher) TasksDone() int { return d.tasksDone.Get() }
 
-// WaitUntilNoTasks stopChan the dispatcher making checks for "0 tasks now" every period
+// WaitUntilNoTasks stops the dispatcher making checks for "0 tasks now" every period
 func (d *Dispatcher) WaitUntilNoTasks(period time.Duration) {
 	for {
 		time.Sleep(period)
@@ -103,8 +106,8 @@ func (d *Dispatcher) popTreat(q *queue.Synced) {
 	go d.treat(popped)
 }
 
-// onResult is called on resultChan receiving from the appropriate channel.
-// a func treating the resultChan called synchronized therefore to treat resultChan is a thread-safe operation
+// onResult is called on result receiving from the appropriate channel.
+// a func treating the result called synchronized, therefore to treat result is a thread-safe operation
 func (d *Dispatcher) onResult(result Result) {
 	d.onResultMutex.Lock()
 	d.onResultFunc(result)
@@ -129,7 +132,7 @@ func (d *Dispatcher) Run() {
 				d.workers.Inc()
 				d.popTreat(&q)
 			}
-		case data := <-d.inputChan: // dispatcher receives inputChan
+		case data := <-d.inputChan: // dispatcher receives some data
 			if d.workers.Get() >= d.maxWorkers {
 				q.Push(data)
 				continue
@@ -145,7 +148,7 @@ func (d *Dispatcher) Run() {
 
 			// queue is empty, simply treat the url
 			go d.treat(data)
-		case <-d.stopChan: // stopChan signal received
+		case <-d.stopChan: // stop signal received
 			// cleaning up, i think it should be implemented better
 			t := time.NewTimer(time.Second)
 			for {
