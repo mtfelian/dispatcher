@@ -9,7 +9,7 @@ import (
 )
 
 type (
-	// Result is a testOutput data consisting of input and output data
+	// Result consists of an input and output data
 	Result struct {
 		In    interface{}
 		Out   interface{}
@@ -29,7 +29,7 @@ type (
 	// TreatFunc is a func for treating generic input element
 	TreatFunc func(element interface{}) (interface{}, error)
 
-	// OnResultFunc is a func to perform with testOutput on task end
+	// OnResultFunc is a func to perform with task result when at task finish
 	OnResultFunc func(result Result)
 )
 
