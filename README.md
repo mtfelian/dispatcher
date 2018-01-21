@@ -3,8 +3,26 @@
 
 # Dispatcher
 
-Dispatcher provides a tasks concurrent treating functionality based
+Dispatcher provides a concurrent tasks treating functionality based
 on go-routines.
+
+After you initialize and run dispatcher it is ready to perform tasks.
+
+You can add tasks via `AddWork()` func. Both `Run()` and `AddWork`
+must be called in separate go-routines. See example below.
+
+To stop the dispatcher you can use the `Stop()` func. But you should
+be careful with it: just after its' call the dispatcher stops
+receiving new work and stop returning results, also if the task was
+already processed but result were not yet sent into appropriate channel.
+When `Stop()` was called, dispatcher tries to flush the channels,
+and exits after 1 second of waiting.
+
+If you need just to do tons of work with dispatcher and quit after
+without waiting for next portions of work, you can use the
+`WaitUntilNoTasks(period)` func. It checks the number of currently
+processing tasks each period of seconds. If it seems that dispatcher
+is not processing any task, it stops.
 
 Here is an usage example:
 
