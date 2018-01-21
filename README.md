@@ -1,4 +1,4 @@
-[![Go Report Card](https://goreportcard.com/badge/github.com/mtfelian/dispatcher)](https://goreportcard.com/report/github.com/mtfelian/dispatcher) 
+[![Go Report Card](https://goreportcard.com/badge/github.com/mtfelian/dispatcher)](https://goreportcard.com/report/github.com/mtfelian/dispatcher)
 [![GoDoc](https://godoc.org/github.com/mtfelian/dispatcher?status.png)](http://godoc.org/github.com/mtfelian/dispatcher)
 
 # Dispatcher
@@ -75,7 +75,7 @@ func Parse(p parser.Parser) {
 
 	// check for no tasks every 5 second
 	d.WaitUntilNoTasks(5 * time.Second)
-	...
+    ...
 }
 ```
 
