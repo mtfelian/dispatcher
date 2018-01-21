@@ -2,6 +2,7 @@ package dispatcher
 
 import (
 	"sync"
+	"time"
 
 	"github.com/mtfelian/dispatcher/counter"
 	"github.com/mtfelian/dispatcher/queue"
@@ -90,6 +91,17 @@ func (d *Dispatcher) AddWork(data interface{}) { d._signals().input <- data }
 // TasksDone returns done tasks count
 func (d *Dispatcher) TasksDone() int { return d.tasksDone.Get() }
 
+// WaitUntilNoTasks stop the dispatcher making checks for "0 tasks now" every period
+func (d *Dispatcher) WaitUntilNoTasks(period time.Duration) {
+	for {
+		time.Sleep(period)
+		if d.Workers() == 0 {
+			break
+		}
+	}
+	d.Stop()
+}
+
 // treat the element
 func (d *Dispatcher) treat(element interface{}) {
 	result, err := d.treatFunc(element)
@@ -149,6 +161,23 @@ func (d *Dispatcher) Run() {
 			// queue is empty, simply treat the url
 			go d.treat(data)
 		case <-d._signals().stop: // stop signal received
+			// cleaning up, i think it should be implemented better
+			t := time.NewTimer(time.Second)
+			for {
+				select {
+				case <-d._signals().result:
+				case <-t.C:
+					break
+				}
+			}
+			t = time.NewTimer(time.Second)
+			for {
+				select {
+				case <-d._signals().input:
+				case <-t.C:
+					break
+				}
+			}
 			return
 		}
 	}
