@@ -35,7 +35,9 @@ type Dispatcher struct {
 	// resultChan <- send here when worker stops
 	resultChan chan Result
 	// stopChan <- send here to stop dispatcher
-	stopChan chan bool
+	stopChan      chan bool
+	stopping      bool
+	stoppingMutex sync.Mutex
 
 	treatFunc TreatFunc
 
@@ -58,6 +60,20 @@ func New(max int, treatFunc TreatFunc, onResultFunc OnResultFunc) *Dispatcher {
 	}
 }
 
+// setStopping sets state to stopping
+func (d *Dispatcher) setStopping() {
+	d.stoppingMutex.Lock()
+	d.stopping = true
+	d.stoppingMutex.Unlock()
+}
+
+// isStopping returns whether the dispatcher is stopping
+func (d *Dispatcher) isStopping() bool {
+	d.stoppingMutex.Lock()
+	defer d.stoppingMutex.Unlock()
+	return d.stopping
+}
+
 // Workers returns current worker count
 func (d *Dispatcher) Workers() int { return d.workers.Get() }
 
@@ -74,7 +90,11 @@ func (d *Dispatcher) Stop() {
 }
 
 // AddWork adds work to the dispatcher
-func (d *Dispatcher) AddWork(data interface{}) { d.inputChan <- data }
+func (d *Dispatcher) AddWork(data interface{}) {
+	if !d.isStopping() {
+		d.inputChan <- data
+	}
+}
 
 // TasksDone returns done tasks count
 func (d *Dispatcher) TasksDone() int { return d.tasksDone.Get() }
@@ -93,14 +113,21 @@ func (d *Dispatcher) WaitUntilNoTasks(period time.Duration) {
 // treat the element
 func (d *Dispatcher) treat(element interface{}) {
 	result, err := d.treatFunc(element)
-	d.resultChan <- Result{In: element, Out: result, Error: err}
+	d.sendResult(Result{In: element, Out: result, Error: err})
+}
+
+// sendResult to results channel
+func (d *Dispatcher) sendResult(result Result) {
+	if !d.isStopping() {
+		d.resultChan <- result
+	}
 }
 
 // popTreat pops an element from queue q and treats it
 func (d *Dispatcher) popTreat(q *queue.Synced) {
 	popped, err := q.Pop()
 	if err != nil {
-		d.resultChan <- Result{In: nil, Out: nil, Error: err}
+		d.sendResult(Result{In: nil, Out: nil, Error: err})
 		return
 	}
 	go d.treat(popped)
@@ -149,14 +176,18 @@ func (d *Dispatcher) Run() {
 			// queue is empty, simply treat the url
 			go d.treat(data)
 		case <-d.stopChan: // stop signal received
-			// cleaning up, i think it should be implemented better
-			t := time.NewTimer(time.Second)
+			d.setStopping()
+			// cleaning up, may be
+			t := time.NewTicker(100 * time.Millisecond)
 			for {
 				select {
 				case <-d.resultChan:
 				case <-d.inputChan:
 				case <-t.C:
-					return
+					if d.Workers() == 0 {
+						t.Stop()
+						return
+					}
 				}
 			}
 		}

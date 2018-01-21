@@ -18,8 +18,7 @@ To stop the dispatcher you can use the `Stop()` func. But you should
 be careful with it: just after its' call the dispatcher stops
 receiving new work and stop returning results, also if the task was
 already processed but result were not yet sent into appropriate channel.
-When `Stop()` was called, dispatcher tries to flush the channels,
-and exits after 1 second of waiting.
+When `Stop()` was called, dispatcher flushes channels and exits.
 
 If you need just to do tons of work with dispatcher and quit after
 without waiting for next portions of work, you can use the
