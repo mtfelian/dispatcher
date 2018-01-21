@@ -65,8 +65,8 @@ func prepareDispatcher(p parser.Parser, fResults, fParsed *os.File, skip []strin
 
 // Parse via given parser
 func Parse(p parser.Parser) {
-    ...
-    d := prepareDispatcher(p, fResults, fParsed, skip, 10)
+	...
+	d := prepareDispatcher(p, fResults, fParsed, skip, 10)
 	go d.Run()
 	log.Println("INFO started dispatcher")
 	for _, url := range urls {
@@ -75,7 +75,7 @@ func Parse(p parser.Parser) {
 
 	// check for no tasks every 5 second
 	d.WaitUntilNoTasks(5 * time.Second)
-    ...
+	...
 }
 ```
 
