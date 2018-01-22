@@ -70,15 +70,11 @@ func prepareDispatcher(p parser.Parser, fResults, fParsed *os.File, skip []strin
 			return nil, nil
 		}
 		record, err := p.Scrape(location)
-		if record != nil {
-			bookRecord := record.(*Record)
-			if err != nil || bookRecord.ID == 0 { // failed to parse
-				return nil, fmt.Errorf("failed to parse at location %s", location)
-			}
+		if record != nil && (err != nil || record.(*Record).ID == 0) { // failed to parse
+			return nil, fmt.Errorf("failed to parse at location %s", location)
 		}
 		return record, nil
 	}
-
 	// onResultFunc logs output data and stores the result
 	onResultFunc := func(result dispatcher.Result) {
 		if result.Error != nil {
