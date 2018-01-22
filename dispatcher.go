@@ -25,6 +25,8 @@ type (
 
 // Dispatcher implements a task-dispatching functionality
 type Dispatcher struct {
+	taskQueue queue.Synced
+
 	workers    counter.Synced
 	maxWorkers int
 	tasksDone  counter.Synced
@@ -48,6 +50,7 @@ type Dispatcher struct {
 // New returns new dispatcher with max workers
 func New(max int, treatFunc TreatFunc, onResultFunc OnResultFunc) *Dispatcher {
 	return &Dispatcher{
+		taskQueue:    queue.New(),
 		workers:      counter.New(0),
 		maxWorkers:   max,
 		tasksDone:    counter.New(0),
@@ -141,9 +144,11 @@ func (d *Dispatcher) onResult(result Result) {
 	d.onResultMutex.Unlock()
 }
 
+// QueueLen returns current length of the queue
+func (d *Dispatcher) QueueLen() int { return d.taskQueue.Len() }
+
 // Run starts dispatching
 func (d *Dispatcher) Run() {
-	q := queue.New()
 	for {
 		select {
 		case r := <-d.resultChan: // worker is done
@@ -155,21 +160,21 @@ func (d *Dispatcher) Run() {
 			d.tasksDone.Inc()
 			d.workers.Dec()
 			// queue is not empty -- can add worker
-			if q.Len() > 0 {
+			if d.taskQueue.Len() > 0 {
 				d.workers.Inc()
-				d.popTreat(&q)
+				d.popTreat(&d.taskQueue)
 			}
 		case data := <-d.inputChan: // dispatcher receives some data
 			if d.workers.Get() >= d.maxWorkers {
-				q.Push(data)
+				d.taskQueue.Push(data)
 				continue
 			}
 			d.workers.Inc()
 
 			// queue is not empty, FIFO - push, pop
-			if q.Len() > 0 {
-				q.Push(data)
-				d.popTreat(&q)
+			if d.taskQueue.Len() > 0 {
+				d.taskQueue.Push(data)
+				d.popTreat(&d.taskQueue)
 				continue
 			}
 
