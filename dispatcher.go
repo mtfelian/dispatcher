@@ -4,8 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mtfelian/dispatcher/counter"
-	"github.com/mtfelian/dispatcher/queue"
+	"github.com/mtfelian/synced"
 )
 
 type (
@@ -25,12 +24,12 @@ type (
 
 // Dispatcher implements a task-dispatching functionality
 type Dispatcher struct {
-	taskQueue queue.Synced
+	taskQueue synced.Queue
 
-	workers    counter.Synced
+	workers    synced.Counter
 	maxWorkers int
-	tasksDone  counter.Synced
-	errorCount counter.Synced
+	tasksDone  synced.Counter
+	errorCount synced.Counter
 
 	// inputChan is an input data channel
 	inputChan chan interface{}
@@ -50,11 +49,11 @@ type Dispatcher struct {
 // New returns new dispatcher with max workers
 func New(max int, treatFunc TreatFunc, onResultFunc OnResultFunc) *Dispatcher {
 	return &Dispatcher{
-		taskQueue:    queue.New(),
-		workers:      counter.New(0),
+		taskQueue:    synced.NewQueue(),
+		workers:      synced.NewCounter(0),
 		maxWorkers:   max,
-		tasksDone:    counter.New(0),
-		errorCount:   counter.New(0),
+		tasksDone:    synced.NewCounter(0),
+		errorCount:   synced.NewCounter(0),
 		inputChan:    make(chan interface{}),
 		resultChan:   make(chan Result),
 		stopChan:     make(chan bool),
@@ -127,7 +126,7 @@ func (d *Dispatcher) sendResult(result Result) {
 }
 
 // popTreat pops an element from queue q and treats it
-func (d *Dispatcher) popTreat(q *queue.Synced) {
+func (d *Dispatcher) popTreat(q *synced.Queue) {
 	popped, err := q.Pop()
 	if err != nil {
 		d.sendResult(Result{In: nil, Out: nil, Error: err})

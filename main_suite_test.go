@@ -21,7 +21,7 @@ import (
 	"time"
 
 	d "github.com/mtfelian/dispatcher"
-	"github.com/mtfelian/dispatcher/counter"
+	"github.com/mtfelian/synced"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -31,7 +31,7 @@ var (
 	dispatcher *d.Dispatcher
 	server     *httptest.Server
 
-	totalFound = counter.New(0)
+	totalFound = synced.NewCounter(0)
 	maxWorkers = 9
 )
 
