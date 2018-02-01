@@ -104,10 +104,10 @@ func (d *Dispatcher) TasksDone() int { return d.tasksDone.Get() }
 // WaitUntilNoTasks stops the dispatcher making checks for "0 tasks now" every period
 func (d *Dispatcher) WaitUntilNoTasks(period time.Duration) {
 	for {
-		time.Sleep(period)
 		if d.Workers() == 0 {
 			break
 		}
+		time.Sleep(period)
 	}
 	d.Stop()
 }
