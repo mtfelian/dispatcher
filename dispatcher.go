@@ -98,9 +98,9 @@ func (d *Dispatcher) AddWork(data interface{}) {
 	}
 }
 
-// AddWorkMore adds work with data to the dispatcher after queue size will fall below queueLimit value,
+// FillWork adds work with data to the dispatcher after queue size will fall below queueLimit value,
 // check it every checkInterval
-func (d *Dispatcher) AddWorkMore(data interface{}, queueLimit int, checkInterval time.Duration) {
+func (d *Dispatcher) FillWork(data interface{}, queueLimit int, checkInterval time.Duration) {
 	for d.QueueLen() > queueLimit { // to prevent queue major growth
 		time.Sleep(checkInterval)
 		continue
