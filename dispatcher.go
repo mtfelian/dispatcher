@@ -91,11 +91,21 @@ func (d *Dispatcher) Stop() {
 	close(d.stopChan)
 }
 
-// AddWork adds work to the dispatcher
+// AddWork adds work with data to the dispatcher
 func (d *Dispatcher) AddWork(data interface{}) {
 	if !d.isStopping() {
 		d.inputChan <- data
 	}
+}
+
+// AddWorkMore adds work with data to the dispatcher after queue size will fall below queueLimit value,
+// check it every checkInterval
+func (d *Dispatcher) AddWorkMore(data interface{}, queueLimit int, checkInterval time.Duration) {
+	for d.QueueLen() > queueLimit { // to prevent queue major growth
+		time.Sleep(checkInterval)
+		continue
+	}
+	go d.AddWork(data)
 }
 
 // TasksDone returns done tasks count
