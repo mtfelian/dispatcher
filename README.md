@@ -10,10 +10,9 @@ on go-routines.
 After you initialize and run dispatcher it is ready to perform tasks.
 
 You can add tasks via `AddWork()` func. Both `Run()` and `AddWork()`
-must be called in separate go-routines (please see example below).
-Tasks will be treated concurrently but amount of workers will be limited
-to the parameter specified at the dispatcher initialization
-call `New()`.
+must be called in separate go-routines. Tasks will be treated
+concurrently but amount of workers will be limited to the parameter
+specified at the dispatcher initialization call `New()`.
 
 To stop the dispatcher you can use the `Stop()` func. But you should
 be careful with it: just after this call the dispatcher stops
