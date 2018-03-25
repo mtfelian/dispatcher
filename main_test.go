@@ -12,8 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Testing apiTreat", func() {
-
+var _ = Describe("Testing with Ginkgo", func() {
 	It("checks dispatcher, OK", func() {
 		totalExpected, urlsSent := 0, 500
 

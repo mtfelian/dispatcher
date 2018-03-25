@@ -1,12 +1,3 @@
-/*
-In this example the test application launches the HTTP server.
-This HTTP server handles route POST /treat
-Also it launches mock HTTP server which used out of API request to POST /treat via treatFunc : http.Get(in.URL)
-I.e. data sent to the dispatcher are treated via treatFunc call.
-Then result is transmitted to onResultFunc of the dispatcher and you will see it
-on the console stdout as "Count for..."
-Launch with 'ginkgo -race' or 'ginkgo -race -untilItFails' for infinite testing.
-*/
 package dispatcher_test
 
 import (
@@ -39,6 +30,20 @@ var (
 type testInput struct {
 	URL  string `json:"url"`
 	What string `json:"what"`
+}
+
+// Treat defines how the test input should be treated
+func (e testInput) Treat() (interface{}, error) {
+	response, err := http.Get(e.URL)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	respBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+	return testOutput{n: strings.Count(string(respBytes), e.What), url: e.URL}, nil
 }
 
 // testOutput is an output from a dispatcher
@@ -77,20 +82,6 @@ func TestApp(t *testing.T) {
 	mServer = newMockServer()
 	defer mServer.Close()
 
-	treatFunc := func(element interface{}) (interface{}, error) {
-		in := element.(testInput)
-		response, err := http.Get(in.URL)
-		if err != nil {
-			return nil, err
-		}
-		defer response.Body.Close()
-		respBytes, err := ioutil.ReadAll(response.Body)
-		if err != nil {
-			return nil, err
-		}
-		return testOutput{n: strings.Count(string(respBytes), in.What), url: in.URL}, nil
-	}
-
 	onResultFunc := func(r d.Result) {
 		if r.Error == nil {
 			n := r.Out.(testOutput).n
@@ -101,7 +92,7 @@ func TestApp(t *testing.T) {
 		fmt.Printf("Error for %s: %v\n", r.In.(testInput), r.Error)
 	}
 
-	dispatcher = d.New(maxWorkers, treatFunc, onResultFunc)
+	dispatcher = d.New(maxWorkers, onResultFunc)
 	go dispatcher.Run()
 
 	rand.Seed(time.Now().UnixNano())
