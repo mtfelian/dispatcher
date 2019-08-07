@@ -1,2 +1,0 @@
-# synced
-Thread-safe things
