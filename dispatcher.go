@@ -83,6 +83,10 @@ func (d *Dispatcher) ErrorCount() int { return d.errorCount.Get() }
 
 // Stop the dispatcher
 func (d *Dispatcher) Stop() {
+	if d.isStopping() {
+		return
+	}
+	d.setStopping()
 	d.stopC <- struct{}{}
 	close(d.stopC)
 }
@@ -178,7 +182,6 @@ func (d *Dispatcher) Run() {
 			// queue is empty, simply treat the url
 			go d.treat(data)
 		case <-d.stopC: // stop signal received
-			d.setStopping()
 			// cleaning up, may be
 			t := time.NewTicker(100 * time.Millisecond)
 			for {
