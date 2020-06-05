@@ -69,7 +69,7 @@ func (h *testHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() { dispatcher.AddWork(input) }()
+	dispatcher.AddWork(input)
 	w.WriteHeader(http.StatusOK)
 }
 
